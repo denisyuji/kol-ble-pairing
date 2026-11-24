@@ -40,7 +40,15 @@ The production stations do not need Python. Build a single executable once per O
 | Linux / macOS | `./build.sh` | `dist/kol-ble-pairing` |
 | Windows | `powershell -ExecutionPolicy Bypass -File build.ps1` | `dist\kol-ble-pairing.exe` |
 
-PyInstaller does not cross-compile, so each OS has to be built on that OS. On the station:
+PyInstaller does not cross-compile, so each OS has to be built on that OS.
+
+GitHub Actions (`.github/workflows/build.yml`) builds all three on every push to `main`, on pull requests, and on demand from the Actions tab. Download the executables from the run's **Artifacts**. Pushing a tag such as `v1.0.0` also publishes them as a GitHub release:
+
+- `kol-ble-pairing-linux-x64.tar.gz`, built on Ubuntu 22.04 (glibc 2.35).
+- `kol-ble-pairing-macos-arm64.tar.gz`, for Apple Silicon.
+- `kol-ble-pairing-windows-x64.exe`.
+
+On the station:
 
 ```sh
 ./kol-ble-pairing --wifi-file line3.wifi          # Windows: kol-ble-pairing.exe --wifi-file line3.wifi

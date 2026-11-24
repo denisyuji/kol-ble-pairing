@@ -1,0 +1,92 @@
+# Builds the standalone kol-ble-pairing executable on Linux, macOS and
+# Windows. Every run uploads them as workflow artifacts; pushing a tag
+# v* also publishes them as a GitHub release.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest Ubuntu runner: the binary needs a glibc at least as new
+          # as the build machine's (22.04 = glibc 2.35).
+          - os: ubuntu-22.04
+            asset: kol-ble-pairing-linux-x64
+          - os: macos-latest
+            asset: kol-ble-pairing-macos-arm64
+          - os: windows-latest
+            asset: kol-ble-pairing-windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build (Linux, macOS)
+        if: runner.os != 'Windows'
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
+        run: ./build.sh
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          exe=dist/kol-ble-pairing
+          [ "$RUNNER_OS" = Windows ] && exe=dist/kol-ble-pairing.exe
+          "$exe" --help
+
+      # A tarball keeps the executable bit on Linux and macOS; artifacts
+      # and release assets would otherwise drop it.
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p out
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp dist/kol-ble-pairing.exe "out/${{ matrix.asset }}.exe"
+          else
+            tar -czf "out/${{ matrix.asset }}.tar.gz" -C dist kol-ble-pairing
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
