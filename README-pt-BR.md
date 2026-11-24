@@ -30,9 +30,10 @@ bluetoothctl power on
 
 ```sh
 tar -xzf kol-ble-pairing-macos-arm64.tar.gz
-xattr -d com.apple.quarantine kol-ble-pairing   # permite executar o arquivo baixado
 ./kol-ble-pairing
 ```
+
+Se o macOS se recusar a abrir o arquivo ("não pode ser aberto" ou "desenvolvedor não identificado"), execute `xattr -d com.apple.quarantine kol-ble-pairing` e tente de novo. Se o `xattr` responder `No such xattr`, o arquivo não estava bloqueado e não é preciso fazer nada.
 
 Na primeira execução, o macOS pede acesso ao Bluetooth para o Terminal: permita (Ajustes do Sistema → Privacidade e Segurança → Bluetooth).
 
@@ -60,7 +61,7 @@ Coloque apenas um badge por vez em modo de pareamento: quando a ferramenta vê d
 | Opção | Significado |
 |---|---|
 | `--wifi-file ARQUIVO` | Lê as credenciais do Wi-Fi de um arquivo, para não ter que digitá-las (veja abaixo). |
-| `--ssid NOME`, `--password SENHA` | Passa as credenciais na linha de comando. A senha fica no histórico do shell, então prefira `--wifi-file`. |
+| `--ssid NOME`, `--password SENHA` | Passa as credenciais na linha de comando, entre aspas simples: `--password 'minha!senha'`. Sem aspas, o shell altera caracteres como `!` e `$` (no macOS, `!!` insere o comando anterior). A senha também fica no histórico do shell, então prefira `--wifi-file` ou digitá-la quando a ferramenta pedir. |
 | `--name SMCD510011` | Pareia apenas o badge com esse nome. |
 | `--once` | Pareia um badge e sai. |
 | `--help` | Lista as opções. |

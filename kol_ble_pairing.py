@@ -30,9 +30,13 @@ import time
 try:
     from bleak import BleakClient, BleakScanner
     from bleak.backends.device import BLEDevice
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
 except ImportError as missing:
     sys.exit(f"missing dependency ({missing.name}): run  pip install -r requirements.txt")
+try:  # BluFi needs AES-CFB, which cryptography 47+ moved to "decrepit" (gone from modes in 49)
+    from cryptography.hazmat.decrepit.ciphers.modes import CFB
+except ImportError:
+    from cryptography.hazmat.primitives.ciphers.modes import CFB
 
 # ---------------------------------------------------------------------------
 # Fixed pairing parameters
@@ -147,7 +151,7 @@ def blufi_checksum(seq: int, data: bytes) -> int:
 
 
 def aes_cfb(key: bytes, seq: int, data: bytes, decrypt: bool = False) -> bytes:
-    cipher = Cipher(algorithms.AES(key), modes.CFB(bytes([seq]) + bytes(15)))
+    cipher = Cipher(algorithms.AES(key), CFB(bytes([seq]) + bytes(15)))
     op = cipher.decryptor() if decrypt else cipher.encryptor()
     return op.update(data) + op.finalize()
 
