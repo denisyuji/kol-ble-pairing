@@ -23,6 +23,7 @@ A production-line CLI that pairs KOL Smart Badges running the **stock vendor fir
 
 - From source: `python kol_ble_pairing.py --once --ssid <ssid>` (asks for the password). Needs a BLE adapter and a badge in pairing mode.
 - Executable: `./build-container.sh` on Linux, `./build.sh` on macOS, `build.ps1` on Windows. PyInstaller does not cross-compile. A Linux binary needs a glibc at least as new as the build machine's (the kernel version does not matter), so build Linux binaries with `./build-container.sh`, not a bare `./build.sh`. Check the result with `objdump -T dist/kol-ble-pairing | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1`.
+- Releases: set `VERSION` in `kol_ble_pairing.py`, commit, then push the tag `v<VERSION>`; CI fails a tag that does not match `--version`.
 - Testers use the executables, so rebuild `dist/` after any change to `kol_ble_pairing.py`.
 - There are no automated tests; check encoding changes offline by importing the module and calling `nvs_encode` / `pb_decode`, and pairing changes against a real badge.
 

@@ -52,9 +52,11 @@ If SmartScreen or the antivirus blocks it, allow the file. You do not need to pa
 3. It ends each badge with one of these lines:
    - `==== SUCCESS: SMCD510011 is paired and connected to '<network>' ====`: done, take the next badge.
    - `!!!! FAILED: SMCD510011: <reason>`: set up that badge again, or check its settings by hand. If the badge can't see the network, the tool lists the networks it does see.
-4. Press **Ctrl-C** to stop. The tool prints how many badges were paired, how many need checking and how many failed.
 
-Put only one badge in pairing mode at a time: when it sees two, it waits until only one is left. Badges already paired in the session are ignored. A pairing usually takes about 20 s.
+   After each badge it lists every badge processed so far (`paired`, `VERIFY` or `FAILED`), so you can check them against the ID on the badge and box labels.
+4. Press **Ctrl-C** to stop. The tool prints the same list for the whole session.
+
+Several badges can be in pairing mode at the same time: the tool pairs them one at a time, the strongest signal first. Badges already paired in the session are ignored. A pairing usually takes about 20 s.
 
 ### Options
 
@@ -63,8 +65,9 @@ Put only one badge in pairing mode at a time: when it sees two, it waits until o
 | `--wifi-file FILE` | Read the Wi-Fi credentials from a file, so they don't have to be typed (see below). |
 | `--ssid NAME`, `--password PASSWORD` | Give the credentials on the command line, in single quotes: `--password 'my!pass'`. Without quotes the shell changes characters such as `!` and `$` (on macOS, `!!` inserts the previous command). The password also stays in the shell history, so prefer `--wifi-file` or the prompt. |
 | `--name SMCD510011` | Pair only the badge with this name. |
-| `--once` | Pair one badge and exit. |
-| `--help` | List the options. |
+| `--once` | Pair one badge and exit. If several are in pairing mode, it stops and asks for `--name`. |
+| `--help` | List the options and show the version. |
+| `--version` | Show the version. |
 
 A Wi-Fi file is a text file like this (keep it private, e.g. `chmod 600`):
 
@@ -124,6 +127,6 @@ PyInstaller doesn't cross-compile, so each OS builds its own executable into `di
 
 ### CI and releases
 
-`.github/workflows/build.yml` builds all three on every push to `main`, on pull requests and on demand. The executables are the run's **Artifacts**. Pushing a tag such as `v1.0.1` also publishes them as a GitHub release.
+`.github/workflows/build.yml` builds all three on every push to `main`, on pull requests and on demand. The executables are the run's **Artifacts**. Pushing a tag such as `v1.0.1` also publishes them as a GitHub release. Set `VERSION` in `kol_ble_pairing.py` to the same number first: CI fails a tag that doesn't match.
 
 `./fetch-artifacts.sh` pushes the current branch, waits for its CI run and downloads the three executables into `artifacts/`. It needs `gh`, logged in, and refuses to run with uncommitted changes. The macOS job sometimes waits for a runner until GitHub cancels it. Re-run it with `gh run rerun <run-id> --failed`.

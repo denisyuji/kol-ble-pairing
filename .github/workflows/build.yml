@@ -60,6 +60,11 @@ jobs:
           exe=dist/kol-ble-pairing
           [ "$RUNNER_OS" = Windows ] && exe=dist/kol-ble-pairing.exe
           "$exe" --help
+          "$exe" --version
+          # A release tag must match VERSION in kol_ble_pairing.py.
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$("$exe" --version)" != "kol-ble-pairing ${GITHUB_REF_NAME#v}" ]; then
+            echo "tag $GITHUB_REF_NAME does not match $("$exe" --version)"; exit 1
+          fi
           if [ "$RUNNER_OS" = Linux ]; then
             objdump -T "$exe" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
           fi

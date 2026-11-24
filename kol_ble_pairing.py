@@ -2,9 +2,9 @@
 """Pair a KOL Smart Badge running the STOCK firmware over BLE.
 
 Sends the Wi-Fi credentials given by the user plus the fixed KOL settings
-(API server, segment duration, timezone), makes the badge scan for Wi-Fi
-networks, checks the requested network is visible, joins it and waits until
-the badge reports it is connected.
+(API server, segment duration, timezone), has the badge join the network and
+waits until it reports it is connected. If the join fails, it lists the
+networks the badge can see.
 
 Runs on Linux, macOS and Windows (bleak). Protocol: docs/BLE_PROVISIONING.md
 (BluFi with DH + AES-128-CFB + CRC16, vendor custom-data command 02 12 for the
@@ -41,6 +41,8 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Fixed pairing parameters
 # ---------------------------------------------------------------------------
+
+VERSION = "1.0.1"  # bump before tagging: CI checks that the tag v<VERSION> matches
 
 SERVER = "badgeapi.yourkol.ai"  # config, record and log API
 SEGMENT_SECONDS = 600
@@ -412,8 +414,10 @@ class SeveralBadges(BadgeError):
 
 
 async def wait_for_badge(prefixes: tuple[str, ...], name: str | None, skip: set[str],
-                         timeout: float | None) -> tuple[BLEDevice, str]:
-    """Waits for one badge in pairing mode (timeout None: forever)."""
+                         timeout: float | None, failed: set[str]) -> tuple[BLEDevice, str]:
+    """Waits for a badge in pairing mode (timeout None: forever). With several in
+    range it picks the strongest signal, badges that failed before last; with a
+    timeout (--once) it refuses to pick."""
     found: dict[str, tuple[str, int, BLEDevice]] = {}
     skipped: set[str] = set()
     seen = asyncio.Event()
@@ -450,10 +454,13 @@ async def wait_for_badge(prefixes: tuple[str, ...], name: str | None, skip: set[
     finally:
         await scanner.stop()
 
-    if len(found) > 1:
-        listing = "\n".join(f"    {n}  ({a}, {r} dBm)" for a, (n, r, _) in sorted(found.items(), key=lambda x: -x[1][1]))
-        raise SeveralBadges(f"more than one badge in pairing mode:\n{listing}")
-    local, _, device = next(iter(found.values()))
+    ranked = sorted(found.values(), key=lambda x: (x[0] in failed, -x[1]))
+    if len(ranked) > 1:
+        listing = "\n".join(f"    {n}  ({d.address}, {r} dBm)" for n, r, d in ranked)
+        if timeout:
+            raise SeveralBadges(f"more than one badge in pairing mode:\n{listing}")
+        say(f"{len(ranked)} badges in pairing mode, pairing them one at a time:\n{listing}")
+    local, _, device = ranked[0]
     return device, local
 
 
@@ -667,13 +674,9 @@ async def session(ssid: str, password: str, name: str | None, once: bool) -> int
         try:
             device, CURRENT = await wait_for_badge(
                 NAME_PREFIXES, name, {b for b, r in RESULTS.items() if r == "ok"},
-                SCAN_TIMEOUT if once else None)
-        except SeveralBadges as error:
-            if once:
-                raise BadgeError(f"{error}\n  run again with --name <badge name> to pick one") from None
-            print(f"\n{error}\n  leave only one badge in pairing mode; scanning again in 5 s ...\n")
-            await asyncio.sleep(5)
-            continue
+                SCAN_TIMEOUT if once else None, {b for b, r in RESULTS.items() if r == "failed"})
+        except SeveralBadges as error:  # only with --once
+            raise BadgeError(f"{error}\n  run again with --name <badge name> to pick one") from None
 
         try:
             mismatches = await pair(device, CURRENT, ssid, password)
@@ -683,22 +686,26 @@ async def session(ssid: str, password: str, name: str | None, once: bool) -> int
             PHASE = "idle"  # the link is gone: a Ctrl-C now concerns no badge
             if once:
                 return 1
+            print_summary("Badges processed so far")
             await asyncio.sleep(3)
             continue
         ok = report_success(CURRENT, ssid, mismatches)
         RESULTS[CURRENT] = "ok" if ok else "check"
         if once:
             return 0 if ok else 2
+        print_summary("Badges processed so far")
 
 
-def print_summary() -> None:
+def print_summary(title: str = "Session summary") -> None:
+    """Every badge processed in the session, to check against the ID labels."""
     if not RESULTS:
         return
     counts = {r: sum(1 for v in RESULTS.values() if v == r) for r in ("ok", "check", "failed")}
-    print(f"Session summary: {counts['ok']} paired, {counts['check']} to verify, {counts['failed']} failed")
-    for badge, result in RESULTS.items():
-        if result != "ok":
-            print(f"  {result:<7}{badge}")
+    print(f"\n{title}: {counts['ok']} paired, {counts['check']} to verify, {counts['failed']} failed")
+    labels = {"ok": "paired", "check": "VERIFY", "failed": "FAILED"}
+    for number, (badge, result) in enumerate(RESULTS.items(), 1):
+        print(f"  {number:>3}. {badge}  {labels[result]}")
+    print()
 
 
 def credentials_file(path: str) -> dict[str, str]:
@@ -738,12 +745,13 @@ def raise_interrupt(_signum, _frame) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description=f"kol-ble-pairing {VERSION}\n\n{__doc__}", formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--wifi-file", metavar="FILE", help="file with ssid=... and password=... lines")
     parser.add_argument("--ssid", help="Wi-Fi network name (default: --wifi-file, $KOL_WIFI_SSID, or asked once)")
     parser.add_argument("--password", help="Wi-Fi password (default: --wifi-file, $KOL_WIFI_PASSWORD, or asked once)")
     parser.add_argument("--name", help="pair only the badge with this BLE name, e.g. SMCD510011")
     parser.add_argument("--once", action="store_true", help="pair a single badge and exit")
+    parser.add_argument("--version", action="version", version=f"kol-ble-pairing {VERSION}")
     args = parser.parse_args()
 
     # Closing the app other than with Ctrl-C is handled the same way.

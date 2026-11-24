@@ -52,9 +52,11 @@ Se o SmartScreen ou o antivírus bloquear, permita o arquivo. Não é preciso pa
 3. Cada badge termina com uma destas linhas:
    - `==== SUCCESS: SMCD510011 is paired and connected to '<rede>' ====`: pronto, pegue o próximo badge.
    - `!!!! FAILED: SMCD510011: <motivo>`: configure esse badge de novo ou confira as configurações dele manualmente. Se o badge não enxerga a rede, a ferramenta lista as redes que ele vê.
-4. Pressione **Ctrl-C** para encerrar. A ferramenta mostra quantos badges foram pareados, quantos precisam ser conferidos e quantos falharam.
 
-Coloque apenas um badge por vez em modo de pareamento: quando a ferramenta vê dois, espera até sobrar só um. Badges já pareados na sessão são ignorados. Um pareamento leva em geral cerca de 20 s.
+   Depois de cada badge, a ferramenta lista todos os badges processados até o momento (`paired`, `VERIFY` ou `FAILED`), para você conferir com o ID na etiqueta do badge e da caixa.
+4. Pressione **Ctrl-C** para encerrar. A ferramenta mostra a mesma lista para a sessão inteira.
+
+Vários badges podem estar em modo de pareamento ao mesmo tempo: a ferramenta os pareia um de cada vez, começando pelo sinal mais forte. Badges já pareados na sessão são ignorados. Um pareamento leva em geral cerca de 20 s.
 
 ### Opções
 
@@ -63,8 +65,9 @@ Coloque apenas um badge por vez em modo de pareamento: quando a ferramenta vê d
 | `--wifi-file ARQUIVO` | Lê as credenciais do Wi-Fi de um arquivo, para não ter que digitá-las (veja abaixo). |
 | `--ssid NOME`, `--password SENHA` | Passa as credenciais na linha de comando, entre aspas simples: `--password 'minha!senha'`. Sem aspas, o shell altera caracteres como `!` e `$` (no macOS, `!!` insere o comando anterior). A senha também fica no histórico do shell, então prefira `--wifi-file` ou digitá-la quando a ferramenta pedir. |
 | `--name SMCD510011` | Pareia apenas o badge com esse nome. |
-| `--once` | Pareia um badge e sai. |
-| `--help` | Lista as opções. |
+| `--once` | Pareia um badge e sai. Se houver vários em modo de pareamento, para e pede `--name`. |
+| `--help` | Lista as opções e mostra a versão. |
+| `--version` | Mostra a versão. |
 
 Um arquivo de Wi-Fi é um arquivo de texto como este (mantenha-o privado, por exemplo com `chmod 600`):
 
@@ -124,6 +127,6 @@ O PyInstaller não faz compilação cruzada, então cada sistema gera o próprio
 
 ### CI e versões
 
-`.github/workflows/build.yml` gera os três a cada push na `main`, em pull requests e sob demanda. Os executáveis ficam em **Artifacts** da execução. Enviar uma tag como `v1.0.1` também os publica como uma versão (release) no GitHub.
+`.github/workflows/build.yml` gera os três a cada push na `main`, em pull requests e sob demanda. Os executáveis ficam em **Artifacts** da execução. Enviar uma tag como `v1.0.1` também os publica como uma versão (release) no GitHub. Antes, ajuste `VERSION` em `kol_ble_pairing.py` para o mesmo número: o CI falha com uma tag diferente.
 
 `./fetch-artifacts.sh` envia o branch atual, espera a execução do CI e baixa os três executáveis em `artifacts/`. Requer o `gh` autenticado e se recusa a rodar com alterações não commitadas. Às vezes o job do macOS fica esperando um runner até o GitHub cancelá-lo. Execute-o de novo com `gh run rerun <run-id> --failed`.
