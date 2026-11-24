@@ -468,7 +468,7 @@ async def connect(device: BLEDevice) -> tuple[BleakClient, BluFi]:
             await client.connect()
             break
         except Exception as error:  # noqa: BLE001
-            say(f"connection attempt {attempt}/4 failed: {error or type(error).__name__}")
+            say(f"connection attempt {attempt}/4 failed: {str(error) or type(error).__name__}")
             if attempt == 4:
                 raise BadgeError("cannot connect to the badge: is it still in pairing mode?") from None
             await asyncio.sleep(1)
@@ -577,7 +577,7 @@ async def join_wifi(host: BluFi, ssid: str, password: str) -> None:
                 say(f"badge Wi-Fi: {STA_STATES.get(state) or STA_FAILURES.get(state, 'state')} ({state})")
                 last_state = state
             if state == STA_CONNECTED and report["ssid"] in (None, ssid):
-                say(f"the badge reports it is connected to {ssid!r} after {elapsed:.0f} s")
+                say(f"the badge reports it is connected to {ssid!r} after {loop.time() - started:.0f} s")
                 return
             # A failure reason is the badge's answer to this join (the stock
             # firmware sends it within seconds and then stops reporting), so stop
