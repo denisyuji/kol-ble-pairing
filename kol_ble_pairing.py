@@ -47,6 +47,10 @@ TIMEZONE_LABEL = "GMT-3"
 
 # The stock firmware advertises "SMCD" + serial tail (e.g. SMCD510011).
 NAME_PREFIXES = ("SCMD", "SMCD")
+# The vendor app speaks this tool's command set (Info `02 01`, NVS `02 02`/`02 12`)
+# only to "SM..." names of exactly 10 characters ("wifi_new"); other lengths are
+# the older JSON protocol, and "SMCE..." the unframed 4G one.
+NAME_LENGTH = 10
 
 SCAN_TIMEOUT = 120  # s waiting for the badge to advertise
 AP_SCAN_TIMEOUT = 40  # s for the badge's Wi-Fi scan
@@ -81,6 +85,10 @@ SECURITY_MODE = 0x13  # data encrypted + checksummed, control checksummed
 OPMODE_STA = 0x01
 STA_CONNECTED, STA_FAILED, STA_CONNECTING, STA_NO_IP = 0, 1, 2, 3
 STA_STATES = {0: "connected", 1: "connection failed", 2: "connecting", 3: "connected, waiting for IP"}
+# Codes the vendor app reads in the same byte after a failed join (ESP-IDF
+# disconnect reasons), with what it tells the user.
+STA_FAILURES = {15: "wrong password", 202: "wrong password", 201: "network not found",
+                203: "association failed, try again"}
 
 # RFC 2409 group 2 (1024 bits), the group the vendor app negotiates with.
 DH_PRIME = int(
@@ -106,6 +114,10 @@ NVS_FIELDS = {
     10: ("no_switch", False), 11: ("s3_config", True), 12: ("disable_tls", False),
     13: ("compress", True),
 }
+# The vendor app's limits: longer strings or messages "may become unreadable on
+# the device" (its GetConfig reply buffer is 1 KiB).
+NVS_MAX_STRING = 255
+NVS_MAX_MESSAGE = 1021
 # Stock config values (FINDINGS.md), used only if the badge refuses GetConfig.
 STOCK_DEFAULTS = {5: 10, 6: 0}
 FIXED = {1: SERVER, 2: SERVER, 3: SERVER, 4: SEGMENT_SECONDS, 8: TIMEZONE}
@@ -225,16 +237,20 @@ def nvs_value(fields: dict[int, object], number: int):
 
 
 def nvs_encode(values: dict[int, object]) -> bytes:
+    """Encodes like the vendor app: the strings are proto3 `optional` and always
+    sent (empty included), the numbers have no presence and are left out at 0."""
     message = b""
     for number in sorted(values):
         value = values[number]
-        if value in (None, "", 0):
-            continue  # proto3 default, omitted like the vendor app does
         if NVS_FIELDS[number][1]:
-            raw = str(value).encode()
+            raw = str(value or "").encode()
+            if len(raw) > NVS_MAX_STRING:
+                raise BadgeError(f"{NVS_FIELDS[number][0]} is longer than {NVS_MAX_STRING} bytes")
             message += pb_varint((number << 3) | 2) + pb_varint(len(raw)) + raw
-        else:
+        elif value:
             message += pb_varint(number << 3) + pb_varint(int(value))
+    if len(message) > NVS_MAX_MESSAGE:
+        raise BadgeError(f"the configuration is longer than {NVS_MAX_MESSAGE} bytes")
     return message
 
 
@@ -401,6 +417,11 @@ async def wait_for_badge(prefixes: tuple[str, ...], name: str | None, skip: set[
         local = adv.local_name or device.name or ""
         if not local.upper().startswith(prefixes) or (name and local.upper() != name.upper()):
             return
+        if len(local) != NAME_LENGTH:
+            if local not in skipped:
+                say(f"ignoring {local}: not a {NAME_LENGTH}-character name, so not a model this tool supports")
+                skipped.add(local)
+            return
         if local in skip:
             if local not in skipped:
                 say(f"ignoring {local}: already paired in this session")
@@ -453,9 +474,10 @@ async def connect(address: str) -> tuple[BleakClient, BluFi]:
             pass
     mtu = client.mtu_size or 23
     # Each BluFi frame (4-byte header + data + 2-byte CRC) must fit one ATT write.
+    say(f"BLE connected (MTU {mtu}); negotiating encryption (DH key exchange) ...")
     await host.start(client, max(min(mtu - 3 - 6, 255), 8))
     await host.negotiate()
-    say(f"secure BluFi session established (MTU {mtu})")
+    say("secure BluFi session established (AES-128 + CRC16)")
     return client, host
 
 
@@ -465,7 +487,7 @@ def show_value(number: int, value) -> str:
 
 async def configure(host: BluFi) -> list[str]:
     """Sends server, segment duration and timezone; returns readback mismatches."""
-    say("reading the badge's current configuration ...")
+    say("step 2/6: reading the badge's current configuration ...")
     status, current = await host.vendor(VENDOR_GET_CONFIG)
     values = {n: nvs_value(current, n) for n in NVS_FIELDS}
     if status != 0:
@@ -478,21 +500,28 @@ async def configure(host: BluFi) -> list[str]:
         print(f"    {NVS_FIELDS[number][0]:<15} = {show_value(number, new)}{mark}")
     values.update(FIXED)
 
-    say("sending server, segment duration and timezone ...")
+    say("step 3/6: sending server, segment duration and timezone ...")
     status, _ = await host.vendor(VENDOR_SET_CONFIG, nvs_encode(values))
     if status != 0:
         raise BadgeError(f"the badge rejected the configuration (status {status})")
+    say("the badge accepted the configuration; reading it back to verify ...")
 
     status, readback = await host.vendor(VENDOR_GET_CONFIG)
     if status != 0:
+        say("WARNING: the configuration could not be read back")
         return ["configuration could not be read back"]
-    return [f"{NVS_FIELDS[n][0]} reads back {show_value(n, nvs_value(readback, n))}, expected {show_value(n, v)}"
-            for n, v in FIXED.items() if nvs_value(readback, n) != v]
+    mismatches = [f"{NVS_FIELDS[n][0]} reads back {show_value(n, nvs_value(readback, n))}, expected {show_value(n, v)}"
+                  for n, v in FIXED.items() if nvs_value(readback, n) != v]
+    for line in mismatches:
+        say(f"WARNING: {line}")
+    if not mismatches:
+        say("configuration verified: the badge stored server, segment duration and timezone")
+    return mismatches
 
 
 async def scan_networks(host: BluFi) -> list[tuple[str, int]]:
     for attempt in range(1, 3):
-        say("asking the badge to scan for Wi-Fi networks ...")
+        say(f"step 5/6: asking the badge to scan for Wi-Fi networks (up to {AP_SCAN_TIMEOUT} s) ...")
         host.drain()
         await host.send(CTRL, CTRL_GET_AP_LIST)
         try:
@@ -515,11 +544,12 @@ def print_networks(aps: list[tuple[str, int]]) -> None:
 
 
 async def join_wifi(host: BluFi, ssid: str, password: str) -> None:
-    say(f"sending Wi-Fi credentials for {ssid!r} ...")
+    say(f"step 4/6: sending Wi-Fi credentials for {ssid!r} ...")
     host.drain()
     await host.send(CTRL, CTRL_SET_OPMODE, bytes([OPMODE_STA]))
     await host.send(DATA, DATA_STA_SSID, ssid.encode())
     await host.send(DATA, DATA_STA_PASSWORD, password.encode())
+    say("Wi-Fi credentials sent (encrypted)")
 
     aps = await scan_networks(host)
     visible = [rssi for name, rssi in aps if name == ssid]
@@ -528,7 +558,8 @@ async def join_wifi(host: BluFi, ssid: str, password: str) -> None:
             print_networks(aps)
         raise BadgeError(f"the badge does not see the network {ssid!r}"
                          + ("" if aps else " (its scan found no network at all)"))
-    say(f"the badge sees {ssid!r} at {max(visible)} dBm; connecting ...")
+    say(f"the badge sees {ssid!r} at {max(visible)} dBm ({len(aps)} networks in its scan)")
+    say(f"step 6/6: asking the badge to join {ssid!r} (up to {CONNECT_TIMEOUT} s) ...")
 
     host.drain()
     await host.send(CTRL, CTRL_CONNECT_AP)
@@ -539,30 +570,36 @@ async def join_wifi(host: BluFi, ssid: str, password: str) -> None:
         try:
             report = parse_wifi_report(await host.expect(DATA, DATA_WIFI_REPORT, 5))
         except Timeout:
+            say(f"no Wi-Fi report yet ({elapsed:.0f} s); asking the badge for its Wi-Fi status ...")
             await host.send(CTRL, CTRL_GET_STATUS)  # ask for a Wi-Fi report
             continue
         state = report["state"]
         if state != last_state:
-            say(f"badge Wi-Fi: {STA_STATES.get(state, f'state {state}')}")
+            say(f"badge Wi-Fi: {STA_STATES.get(state) or STA_FAILURES.get(state, 'state')} ({state})")
             last_state = state
         if state == STA_CONNECTED and report["ssid"] in (None, ssid):
+            say(f"the badge reports it is connected to {ssid!r} after {elapsed:.0f} s")
             return
         # A failure right after the connect request may be the previous state.
+        if elapsed > 20 and state in STA_FAILURES:
+            raise BadgeError(f"the badge could not join {ssid!r}: {STA_FAILURES[state]} (code {state})")
         if state == STA_FAILED and elapsed > 20:
             raise BadgeError(f"the badge could not join {ssid!r}: check the password")
-    raise BadgeError(f"the badge did not report a connection to {ssid!r} within {CONNECT_TIMEOUT} s")
+    hint = " (the vendor app reads code 2 as a wrong password)" if last_state == STA_CONNECTING else ""
+    raise BadgeError(f"the badge did not report a connection to {ssid!r} within {CONNECT_TIMEOUT} s{hint}")
 
 
 async def pair(address: str, badge: str, ssid: str, password: str) -> list[str]:
     """Pairs one badge; returns config readback mismatches (empty = all good)."""
     global PHASE
-    say(f"connecting to {badge} ...")
+    say(f"step 1/6: connecting to {badge} over BLE ...")
     client, host = await connect(address)
     try:
         mismatches = await configure(host)
         await join_wifi(host, ssid, password)
         PHASE = "done"
     finally:
+        say(f"disconnecting from {badge} ...")
         try:
             await asyncio.wait_for(client.disconnect(), 10)
         except Exception:  # noqa: BLE001

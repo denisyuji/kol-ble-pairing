@@ -7,11 +7,11 @@ It is made for a production line: you give the Wi-Fi credentials **once per sess
 What it does:
 
 1. Gets the Wi-Fi **SSID** and **password**, once. It does not start without both (see *Wi-Fi credentials* below).
-2. Asks the operator to put a badge in **pairing mode**, then waits for a badge advertising as `SCMD…`/`SMCD…`. If more than one badge is in pairing mode at the same time, it refuses to choose one and scans again 5 s later. Badges already paired in this session are ignored.
+2. Asks the operator to put a badge in **pairing mode**, then waits for a badge advertising as `SCMD…`/`SMCD…` with a 10-character name (e.g. `SMCD510011`). Other name lengths belong to badge models that the vendor app drives with a different command set, so the tool ignores them. If more than one badge is in pairing mode at the same time, it refuses to choose one and scans again 5 s later. Badges already paired in this session are ignored.
 3. Opens a secure BluFi session (DH + AES-128-CFB + CRC16) and reads the badge's config.
-4. Sends the fixed settings with vendor command `02 12` and reads them back. All other settings stay as they were on the badge.
+4. Sends the fixed settings with vendor command `02 12` and reads them back. All other settings stay as they were on the badge. The message is encoded the way the vendor app does it: text fields are always sent, empty ones included, and the app's limits apply (255 bytes per text field, 1021 bytes in total).
 5. Sends the SSID and password, then has the badge scan for Wi-Fi networks. If the SSID is not in the scan, it prints the networks the badge sees and stops.
-6. Has the badge join the network and polls its Wi-Fi status until it reports a connection. It then prints `==== SUCCESS: <badge> ... ====` and goes back to step 2 for the next badge.
+6. Has the badge join the network and polls its Wi-Fi status until it reports a connection. It stops early if the badge reports a wrong password, a network it cannot find, or a failed association (the codes the vendor app shows). It then prints `==== SUCCESS: <badge> ... ====` and goes back to step 2 for the next badge.
 
 If a badge fails, the tool prints `!!!! FAILED: <badge>: <reason>` and tells you to check that badge's settings by hand, then moves on to the next badge.
 
@@ -39,6 +39,7 @@ The production stations do not need Python. Build a single executable once per O
 |---|---|---|
 | Linux / macOS | `./build.sh` | `dist/kol-ble-pairing` |
 | Windows | `powershell -ExecutionPolicy Bypass -File build.ps1` | `dist\kol-ble-pairing.exe` |
+| Linux, in a container (recommended) | `./build-container.sh` | `dist/kol-ble-pairing` |
 
 PyInstaller does not cross-compile, so each OS has to be built on that OS.
 
@@ -56,7 +57,7 @@ On the station:
 
 The OS notes under *Install* still apply: BlueZ on Linux, the Bluetooth permission on macOS, Windows 10 1709+.
 
-- **Linux:** the executable needs a glibc at least as new as the build machine's. Build on the oldest distro the stations run.
+- **Linux:** the executable needs a glibc at least as new as the build machine's. It does not depend on the kernel version. `./build-container.sh` builds it with podman in Debian bullseye (glibc 2.31, see `Containerfile`), so it runs on Ubuntu 20.04, Debian 11, RHEL 9 and newer, whichever distro it is built on. Only `dist/` is mounted writable, and the binary is owned by the user who ran the script. A plain `./build.sh` binary runs only on distros at least as new as the build machine.
 - **macOS:** an unsigned binary copied from another Mac is quarantined by Gatekeeper. Clear it with `xattr -d com.apple.quarantine kol-ble-pairing`, or sign it.
 - **Windows:** antivirus tools sometimes flag single-file PyInstaller executables. Sign the `.exe`, or whitelist it on the stations.
 
@@ -99,6 +100,42 @@ python kol_ble_pairing.py --ssid "MyNetwork"                  # asks for the pas
 python kol_ble_pairing.py --ssid "MyNetwork" --once           # a single badge
 python kol_ble_pairing.py --wifi-file line3.wifi --once --name SMCD510011  # one specific badge
 ```
+
+With the standalone executable, use the same options with `./kol-ble-pairing` (Windows: `kol-ble-pairing.exe`) in place of `python kol_ble_pairing.py`. `--help` lists them.
+
+| Option | Meaning |
+|---|---|
+| `--wifi-file FILE` | Read the SSID and password from `FILE` (see *Wi-Fi credentials*). |
+| `--ssid SSID`, `--password PASSWORD` | Give the credentials on the command line. |
+| `--name NAME` | Pair only the badge with this BLE name, e.g. `SMCD510011`. |
+| `--once` | Pair one badge and exit, instead of badge after badge. |
+
+The tool prints a timestamped line for every step, so the operator can follow it. A badge that pairs looks like this:
+
+```text
+[22:45:53] found badge SMCD510011 (80:B5:4E:5B:16:96, -55 dBm)
+[22:45:56] step 1/6: connecting to SMCD510011 over BLE ...
+[22:46:08] BLE connected (MTU 256); negotiating encryption (DH key exchange) ...
+[22:46:10] secure BluFi session established (AES-128 + CRC16)
+[22:46:10] step 2/6: reading the badge's current configuration ...
+    domain_config   = 'badgeapi.yourkol.ai'  (was 'cw.gdszzy.com')
+    ...
+[22:46:10] step 3/6: sending server, segment duration and timezone ...
+[22:46:10] the badge accepted the configuration; reading it back to verify ...
+[22:46:11] configuration verified: the badge stored server, segment duration and timezone
+[22:46:11] step 4/6: sending Wi-Fi credentials for 'Factory WiFi' ...
+[22:46:11] Wi-Fi credentials sent (encrypted)
+[22:46:11] step 5/6: asking the badge to scan for Wi-Fi networks (up to 40 s) ...
+[22:46:14] the badge sees 'Factory WiFi' at -37 dBm (10 networks in its scan)
+[22:46:14] step 6/6: asking the badge to join 'Factory WiFi' (up to 90 s) ...
+[22:46:18] badge Wi-Fi: connected (0)
+[22:46:18] the badge reports it is connected to 'Factory WiFi' after 4 s
+[22:46:18] disconnecting from SMCD510011 ...
+
+==== SUCCESS: SMCD510011 is paired and connected to 'Factory WiFi' ====
+```
+
+"Connected" means the badge joined the network and has an IP address. Nothing over BLE checks that it can reach the API server; its first request to the API confirms that.
 
 Exit codes: in production-line mode, `130` when the session is ended with Ctrl-C, or `1` on a Bluetooth adapter error. With `--once`:
 
