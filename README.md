@@ -49,6 +49,8 @@ GitHub Actions (`.github/workflows/build.yml`) builds all three on every push to
 - `kol-ble-pairing-macos-arm64.tar.gz`, for Apple Silicon.
 - `kol-ble-pairing-windows-x64.exe`.
 
+`./fetch-artifacts.sh` does this from the command line: it pushes the current branch, waits for its CI run and downloads the three files into `artifacts/` (git-ignored). It needs the GitHub CLI (`gh`), logged in, and refuses to run with uncommitted changes.
+
 On the station:
 
 ```sh

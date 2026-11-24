@@ -1,6 +1,7 @@
 .build-venv/
 build/
 dist/
+artifacts/
 *.spec
 __pycache__/
 *.wifi
