@@ -4,7 +4,7 @@ In Markdown files, do not break lines in the middle of a sentence: write each pa
 
 ## What this is
 
-A production-line CLI that pairs KOL Smart Badges running the **stock vendor firmware** (3.1.x, not the v2 Rust firmware) over BLE: it writes the fixed KOL settings (API server, segment duration, timezone) and the Wi-Fi credentials, then waits until the badge reports it is on Wi-Fi. `README.md` is the operator documentation; keep it in step with the code (steps, options, exit codes, sample output).
+A production-line CLI that pairs KOL Smart Badges running the **stock vendor firmware** (3.1.x, not the v2 Rust firmware) over BLE: it writes the fixed KOL settings (API server, segment duration, timezone) and the Wi-Fi credentials, then waits until the badge reports it is on Wi-Fi. `README.md` is the operator documentation (download, install, run) with a developer section at the bottom; keep it in step with the code (options, result lines, exit codes, build and CI).
 
 ## Files
 
