@@ -45,7 +45,7 @@ PyInstaller does not cross-compile, so each OS has to be built on that OS.
 
 GitHub Actions (`.github/workflows/build.yml`) builds all three on every push to `main`, on pull requests, and on demand from the Actions tab. Download the executables from the run's **Artifacts**. Pushing a tag such as `v1.0.0` also publishes them as a GitHub release:
 
-- `kol-ble-pairing-linux-x64.tar.gz`, built on Ubuntu 22.04 (glibc 2.35).
+- `kol-ble-pairing-linux-x64.tar.gz`, built with `build-container.sh` (glibc 2.31, runs on Ubuntu 20.04 and newer).
 - `kol-ble-pairing-macos-arm64.tar.gz`, for Apple Silicon.
 - `kol-ble-pairing-windows-x64.exe`.
 

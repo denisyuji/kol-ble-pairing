@@ -19,9 +19,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Oldest Ubuntu runner: the binary needs a glibc at least as new
-          # as the build machine's (22.04 = glibc 2.35).
-          - os: ubuntu-22.04
+          # The Linux binary is built in a container (build-container.sh,
+          # Debian bullseye, glibc 2.31), so the runner's glibc does not
+          # matter.
+          - os: ubuntu-latest
             asset: kol-ble-pairing-linux-x64
           - os: macos-latest
             asset: kol-ble-pairing-macos-arm64
@@ -36,8 +37,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build (Linux, macOS)
-        if: runner.os != 'Windows'
+      - name: Build (Linux, in a podman container)
+        if: runner.os == 'Linux'
+        run: ./build-container.sh
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
         env:
           PYTHON: ${{ steps.python.outputs.python-path }}
         run: ./build.sh
@@ -55,6 +60,9 @@ jobs:
           exe=dist/kol-ble-pairing
           [ "$RUNNER_OS" = Windows ] && exe=dist/kol-ble-pairing.exe
           "$exe" --help
+          if [ "$RUNNER_OS" = Linux ]; then
+            objdump -T "$exe" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
+          fi
 
       # A tarball keeps the executable bit on Linux and macOS; artifacts
       # and release assets would otherwise drop it.

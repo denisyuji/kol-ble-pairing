@@ -13,7 +13,7 @@ A production-line CLI that pairs KOL Smart Badges running the **stock vendor fir
 | `kol_ble_pairing.py` | The whole tool, a single file: BluFi client (DH, AES-128-CFB, CRC16, fragmentation), vendor `BD A0` framing, hand-rolled protobuf for `BlufiMsg.NVS`, pairing flow and CLI |
 | `build.sh`, `build.ps1` | Build a single-file PyInstaller executable for the current OS into `dist/` |
 | `build-container.sh`, `Containerfile` | Build the Linux executable with podman in Debian bullseye (glibc 2.31), bind-mounting only `dist/` |
-| `.github/workflows/build.yml` | CI build for Linux (Ubuntu 22.04, glibc 2.35), macOS arm64 and Windows; a `v*` tag publishes a release |
+| `.github/workflows/build.yml` | CI build for Linux (via `build-container.sh`, glibc 2.31), macOS arm64 and Windows; a `v*` tag publishes a release |
 | `requirements.txt`, `requirements-build.txt` | Runtime (`bleak`, `cryptography`) and build (`pyinstaller`) dependencies |
 
 `build/`, `dist/`, `*.spec`, `.build-venv/` and `*.wifi` (credential files) are git-ignored.
