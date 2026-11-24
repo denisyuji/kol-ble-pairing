@@ -33,7 +33,7 @@ The full reference is `../docs/BLE_PROVISIONING.md` and `../docs/blufi.proto` in
 - Config is `02 02` (get) and `02 12` (set) with message `BlufiMsg.NVS`, **not** `ble_rpc.proto`'s `ConfigUpdate`, whose field numbers differ (`ble_rpc.proto` is the custom GATT service of SA01A2/SA02A1 badges, with 16-bit opcodes). Replies are `02 <cmd> <status> <protobuf>`.
 - Encode like the app: string fields are proto3 `optional` and always sent (empty included); numbers are left out at 0. Limits: 255 bytes per string, 1021 bytes per message.
 - Family-1 commands (`[1,12,…]` reset, `[1,30]` set-time) are answered with `01 FF <cmd> <status:24-bit BE>`, not `01 <cmd> <status>`; the tool does not send any today.
-- Wi-Fi join uses standard BluFi: SSID `0x02`, password `0x03`, connect `0x03`, status `0x05` → report `0x0f`. Byte 1 of the report: 0 connected, 1 failed, 2 connecting, 3 no IP yet; the app reads 15/202 as wrong password, 201 as network not found, 203 as association failed (and 2 as wrong password too; unconfirmed on the stock firmware). "Connected" does not prove the API server is reachable.
+- Wi-Fi join uses standard BluFi: SSID `0x02`, password `0x03`, connect `0x03`, status `0x05` → report `0x0f`. Byte 1 of the report: 0 connected, 1 failed, 2 connecting, 3 no IP yet; the app reads 15/202 as wrong password, 201 as network not found, 203 as association failed (and 2 as wrong password too, unconfirmed). Confirmed on fw 3.1.14: a missing SSID is reported as 201 within 5 s, and after that the badge does not answer get-status (`0x05`) at all, so a failure code must end the join at once. "Connected" does not prove the API server is reachable.
 - Timezone is a POSIX TZ string with the sign inverted: GMT-3 is sent as `UTC+3`.
 
 ## The test badge

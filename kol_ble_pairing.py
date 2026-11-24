@@ -29,6 +29,7 @@ import time
 
 try:
     from bleak import BleakClient, BleakScanner
+    from bleak.backends.device import BLEDevice
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 except ImportError as missing:
     sys.exit(f"missing dependency ({missing.name}): run  pip install -r requirements.txt")
@@ -407,9 +408,9 @@ class SeveralBadges(BadgeError):
 
 
 async def wait_for_badge(prefixes: tuple[str, ...], name: str | None, skip: set[str],
-                         timeout: float | None) -> tuple[str, str]:
+                         timeout: float | None) -> tuple[BLEDevice, str]:
     """Waits for one badge in pairing mode (timeout None: forever)."""
-    found: dict[str, tuple[str, int]] = {}
+    found: dict[str, tuple[str, int, BLEDevice]] = {}
     skipped: set[str] = set()
     seen = asyncio.Event()
 
@@ -429,7 +430,7 @@ async def wait_for_badge(prefixes: tuple[str, ...], name: str | None, skip: set[
             return
         if device.address not in found:
             say(f"found badge {local} ({device.address}, {adv.rssi} dBm)")
-        found[device.address] = (local, adv.rssi)
+        found[device.address] = (local, adv.rssi, device)
         seen.set()
 
     wanted = name or "/".join(p + "..." for p in prefixes)
@@ -441,28 +442,34 @@ async def wait_for_badge(prefixes: tuple[str, ...], name: str | None, skip: set[
             await asyncio.wait_for(seen.wait(), timeout)
         except asyncio.TimeoutError:
             raise BadgeError("no badge found. Is it on, in pairing mode and close to this computer?") from None
-        await asyncio.sleep(3)  # give other badges in range a chance to show up
+        await asyncio.sleep(1)  # give other badges in range a chance to show up
     finally:
         await scanner.stop()
 
     if len(found) > 1:
-        listing = "\n".join(f"    {n}  ({a}, {r} dBm)" for a, (n, r) in sorted(found.items(), key=lambda x: -x[1][1]))
+        listing = "\n".join(f"    {n}  ({a}, {r} dBm)" for a, (n, r, _) in sorted(found.items(), key=lambda x: -x[1][1]))
         raise SeveralBadges(f"more than one badge in pairing mode:\n{listing}")
-    address, (local, _) = next(iter(found.items()))
-    return address, local
+    local, _, device = next(iter(found.values()))
+    return device, local
 
 
-async def connect(address: str) -> tuple[BleakClient, BluFi]:
+async def connect(device: BLEDevice) -> tuple[BleakClient, BluFi]:
     global PHASE
     host = BluFi()
-    for attempt in range(1, 4):
-        client = BleakClient(address, timeout=20, disconnected_callback=host.on_disconnect)
+    # A connect that works takes about 4 s; a stuck one never finishes, so retry
+    # after 10 s instead of waiting longer.
+    for attempt in range(1, 5):
+        # The scanner's device object lets bleak connect at once; given only an
+        # address it scans for the badge again first. Retries go by address in
+        # case the OS has dropped the cached device.
+        target = device if attempt == 1 else device.address
+        client = BleakClient(target, timeout=10, disconnected_callback=host.on_disconnect)
         try:
             await client.connect()
             break
         except Exception as error:  # noqa: BLE001
-            say(f"connection attempt {attempt}/3 failed: {error}")
-            if attempt == 3:
+            say(f"connection attempt {attempt}/4 failed: {error or type(error).__name__}")
+            if attempt == 4:
                 raise BadgeError("cannot connect to the badge: is it still in pairing mode?") from None
             await asyncio.sleep(1)
     PHASE = "paired"
@@ -487,7 +494,7 @@ def show_value(number: int, value) -> str:
 
 async def configure(host: BluFi) -> list[str]:
     """Sends server, segment duration and timezone; returns readback mismatches."""
-    say("step 2/6: reading the badge's current configuration ...")
+    say("step 2/5: reading the badge's current configuration ...")
     status, current = await host.vendor(VENDOR_GET_CONFIG)
     values = {n: nvs_value(current, n) for n in NVS_FIELDS}
     if status != 0:
@@ -500,7 +507,7 @@ async def configure(host: BluFi) -> list[str]:
         print(f"    {NVS_FIELDS[number][0]:<15} = {show_value(number, new)}{mark}")
     values.update(FIXED)
 
-    say("step 3/6: sending server, segment duration and timezone ...")
+    say("step 3/5: sending server, segment duration and timezone ...")
     status, _ = await host.vendor(VENDOR_SET_CONFIG, nvs_encode(values))
     if status != 0:
         raise BadgeError(f"the badge rejected the configuration (status {status})")
@@ -521,7 +528,7 @@ async def configure(host: BluFi) -> list[str]:
 
 async def scan_networks(host: BluFi) -> list[tuple[str, int]]:
     for attempt in range(1, 3):
-        say(f"step 5/6: asking the badge to scan for Wi-Fi networks (up to {AP_SCAN_TIMEOUT} s) ...")
+        say(f"asking the badge to scan for Wi-Fi networks (up to {AP_SCAN_TIMEOUT} s) ...")
         host.drain()
         await host.send(CTRL, CTRL_GET_AP_LIST)
         try:
@@ -544,56 +551,66 @@ def print_networks(aps: list[tuple[str, int]]) -> None:
 
 
 async def join_wifi(host: BluFi, ssid: str, password: str) -> None:
-    say(f"step 4/6: sending Wi-Fi credentials for {ssid!r} ...")
+    say(f"step 4/5: sending Wi-Fi credentials for {ssid!r} ...")
     host.drain()
     await host.send(CTRL, CTRL_SET_OPMODE, bytes([OPMODE_STA]))
     await host.send(DATA, DATA_STA_SSID, ssid.encode())
     await host.send(DATA, DATA_STA_PASSWORD, password.encode())
     say("Wi-Fi credentials sent (encrypted)")
-
-    aps = await scan_networks(host)
-    visible = [rssi for name, rssi in aps if name == ssid]
-    if not visible:
-        if aps:
-            print_networks(aps)
-        raise BadgeError(f"the badge does not see the network {ssid!r}"
-                         + ("" if aps else " (its scan found no network at all)"))
-    say(f"the badge sees {ssid!r} at {max(visible)} dBm ({len(aps)} networks in its scan)")
-    say(f"step 6/6: asking the badge to join {ssid!r} (up to {CONNECT_TIMEOUT} s) ...")
+    say(f"step 5/5: asking the badge to join {ssid!r} (up to {CONNECT_TIMEOUT} s) ...")
 
     host.drain()
     await host.send(CTRL, CTRL_CONNECT_AP)
     loop = asyncio.get_running_loop()
     started = loop.time()
     last_state = None
-    while (elapsed := loop.time() - started) < CONNECT_TIMEOUT:
-        try:
-            report = parse_wifi_report(await host.expect(DATA, DATA_WIFI_REPORT, 5))
-        except Timeout:
-            say(f"no Wi-Fi report yet ({elapsed:.0f} s); asking the badge for its Wi-Fi status ...")
-            await host.send(CTRL, CTRL_GET_STATUS)  # ask for a Wi-Fi report
-            continue
-        state = report["state"]
-        if state != last_state:
-            say(f"badge Wi-Fi: {STA_STATES.get(state) or STA_FAILURES.get(state, 'state')} ({state})")
-            last_state = state
-        if state == STA_CONNECTED and report["ssid"] in (None, ssid):
-            say(f"the badge reports it is connected to {ssid!r} after {elapsed:.0f} s")
-            return
-        # A failure right after the connect request may be the previous state.
-        if elapsed > 20 and state in STA_FAILURES:
-            raise BadgeError(f"the badge could not join {ssid!r}: {STA_FAILURES[state]} (code {state})")
-        if state == STA_FAILED and elapsed > 20:
-            raise BadgeError(f"the badge could not join {ssid!r}: check the password")
-    hint = " (the vendor app reads code 2 as a wrong password)" if last_state == STA_CONNECTING else ""
-    raise BadgeError(f"the badge did not report a connection to {ssid!r} within {CONNECT_TIMEOUT} s{hint}")
+    try:
+        while (elapsed := loop.time() - started) < CONNECT_TIMEOUT:
+            try:
+                report = parse_wifi_report(await host.expect(DATA, DATA_WIFI_REPORT, 5))
+            except Timeout:
+                say(f"no Wi-Fi report yet ({elapsed:.0f} s); asking the badge for its Wi-Fi status ...")
+                await host.send(CTRL, CTRL_GET_STATUS)  # ask for a Wi-Fi report
+                continue
+            state = report["state"]
+            if state != last_state:
+                say(f"badge Wi-Fi: {STA_STATES.get(state) or STA_FAILURES.get(state, 'state')} ({state})")
+                last_state = state
+            if state == STA_CONNECTED and report["ssid"] in (None, ssid):
+                say(f"the badge reports it is connected to {ssid!r} after {elapsed:.0f} s")
+                return
+            # A failure reason is the badge's answer to this join (the stock
+            # firmware sends it within seconds and then stops reporting), so stop
+            # at once. A plain "failed" right after the request may still be the
+            # previous state.
+            if state in STA_FAILURES:
+                raise BadgeError(f"the badge could not join {ssid!r}: {STA_FAILURES[state]} (code {state})")
+            if state == STA_FAILED and elapsed > 20:
+                raise BadgeError(f"the badge could not join {ssid!r}: check the password")
+        hint = " (the vendor app reads code 2 as a wrong password)" if last_state == STA_CONNECTING else ""
+        raise BadgeError(f"the badge did not report a connection to {ssid!r} within {CONNECT_TIMEOUT} s{hint}")
+    except BadgeError as error:
+        # Only a failed join pays for a Wi-Fi scan: it tells a network out of
+        # range from a wrong password.
+        if not (host.client and host.client.is_connected):
+            raise
+        say("the join failed; checking which networks the badge can see ...")
+        aps = await scan_networks(host)
+        visible = [rssi for name, rssi in aps if name == ssid]
+        if not visible:
+            if aps:
+                print_networks(aps)
+            raise BadgeError(f"the badge does not see the network {ssid!r}"
+                             + ("" if aps else " (its scan found no network at all)")) from None
+        say(f"the badge sees {ssid!r} at {max(visible)} dBm, so the network is in range")
+        raise error
 
 
-async def pair(address: str, badge: str, ssid: str, password: str) -> list[str]:
+async def pair(device: BLEDevice, badge: str, ssid: str, password: str) -> list[str]:
     """Pairs one badge; returns config readback mismatches (empty = all good)."""
     global PHASE
-    say(f"step 1/6: connecting to {badge} over BLE ...")
-    client, host = await connect(address)
+    say(f"step 1/5: connecting to {badge} over BLE ...")
+    client, host = await connect(device)
     try:
         mismatches = await configure(host)
         await join_wifi(host, ssid, password)
@@ -644,7 +661,7 @@ async def session(ssid: str, password: str, name: str | None, once: bool) -> int
         if not once:
             say("put the NEXT badge in PAIRING MODE (Ctrl-C to finish) ...")
         try:
-            address, CURRENT = await wait_for_badge(
+            device, CURRENT = await wait_for_badge(
                 NAME_PREFIXES, name, {b for b, r in RESULTS.items() if r == "ok"},
                 SCAN_TIMEOUT if once else None)
         except SeveralBadges as error:
@@ -655,7 +672,7 @@ async def session(ssid: str, password: str, name: str | None, once: bool) -> int
             continue
 
         try:
-            mismatches = await pair(address, CURRENT, ssid, password)
+            mismatches = await pair(device, CURRENT, ssid, password)
         except Exception as error:  # noqa: BLE001  (badge, Bluetooth adapter or OS errors)
             report_failure(CURRENT, error)
             RESULTS[CURRENT] = "failed"
