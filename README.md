@@ -1,6 +1,8 @@
 # kol-ble-pairing — pair KOL Smart Badges over Bluetooth
 
-Sets up KOL Smart Badges (stock firmware) on a production line: it sends each badge the KOL server settings and the Wi-Fi credentials over Bluetooth, then checks that the badge joins the Wi-Fi. You enter the Wi-Fi credentials once, then pair one badge after another.
+English | [Português](README-pt-BR.md)
+
+Sets up KOL Smart Badges (stock firmware) on a production line via BLE (Bluetooth Low Energy).
 
 ## Download
 
