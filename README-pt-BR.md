@@ -48,12 +48,12 @@ Se o SmartScreen ou o antivírus bloquear, permita o arquivo. Não é preciso pa
 ## Pareando badges
 
 1. Inicie a ferramenta. Ela pede o nome e a senha da rede Wi-Fi, uma única vez para toda a sessão.
-2. Coloque um badge em **modo de pareamento**. A ferramenta o encontra, configura e mostra uma linha por etapa.
+2. Coloque um badge em **modo de pareamento**. A ferramenta o encontra, mostra o número de série (SN, ex.: `4S1006EC4284510011`, o ID nas etiquetas do badge e da caixa), configura e mostra uma linha por etapa.
 3. Cada badge termina com uma destas linhas, em verde ou vermelho:
    - `==== SUCCESS: SMCD510011 is paired and connected to '<rede>' ====`: pronto, pegue o próximo badge.
    - `!!!! FAILED: SMCD510011: <motivo>`: configure esse badge de novo ou confira as configurações dele manualmente. Se o badge não enxerga a rede, a ferramenta lista as redes que ele vê.
 
-   Depois de cada badge, a ferramenta lista todos os badges processados até o momento (`paired`, `VERIFY` ou `FAILED`), para você conferir com o ID na etiqueta do badge e da caixa.
+   Depois de cada badge, a ferramenta lista todos os badges processados até o momento, pelo SN, com `paired`, `VERIFY` ou `FAILED`, para você conferir com as etiquetas.
 4. Pressione **Ctrl-C** para encerrar. A ferramenta mostra a mesma lista para a sessão inteira.
 
 Vários badges podem estar em modo de pareamento ao mesmo tempo: a ferramenta os pareia um de cada vez, começando pelo sinal mais forte. Badges já pareados na sessão são ignorados. Um pareamento leva em geral cerca de 20 s.

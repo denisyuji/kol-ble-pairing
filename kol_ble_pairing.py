@@ -110,6 +110,7 @@ DH_PRIME = int(
 DH_GENERATOR = 2
 
 # Vendor commands: [family, method]
+VENDOR_GET_INFO = bytes([0x02, 0x01])    # BlufiMsg.Info: #1 model, #2 serial number, #3 firmware
 VENDOR_GET_CONFIG = bytes([0x02, 0x02])
 VENDOR_SET_CONFIG = bytes([0x02, 0x12])
 
@@ -637,6 +638,16 @@ async def pair(device: BLEDevice, badge: str, ssid: str, password: str) -> list[
     say(f"step 1/5: connecting to {badge} over BLE ...")
     client, host = await connect(device)
     try:
+        try:
+            status, info = await host.vendor(VENDOR_GET_INFO)
+        except Timeout:
+            status, info = None, {}
+        text = {n: info[n].decode(errors="replace") for n in (1, 2, 3) if isinstance(info.get(n), bytes)}
+        if text.get(2):
+            SERIALS[badge] = text[2]
+            say(f"badge {badge}: SN {text[2]}, model {text.get(1, '?')}, firmware {text.get(3, '?')}")
+        else:
+            say(f"WARNING: the badge did not report its serial number (status {status})")
         mismatches = await configure(host)
         await join_wifi(host, ssid, password)
         PHASE = "done"
@@ -652,13 +663,13 @@ async def pair(device: BLEDevice, badge: str, ssid: str, password: str) -> list[
 def report_success(badge: str, ssid: str, mismatches: list[str]) -> bool:
     print()
     if mismatches:
-        print(red(f"!!!! {badge}: connected to {ssid!r}, BUT its configuration did not read back as sent:"))
+        print(red(f"!!!! {with_sn(badge)}: connected to {ssid!r}, BUT its configuration did not read back as sent:"))
         for line in mismatches:
             print(f"       - {line}")
         print("     Verify the badge's settings manually.")
         print()
         return False
-    print(green(f"==== SUCCESS: {badge} is paired and connected to {ssid!r} ===="))
+    print(green(f"==== SUCCESS: {with_sn(badge)} is paired and connected to {ssid!r} ===="))
     print(f"     server {SERVER} | segment {SEGMENT_SECONDS} s | timezone {TIMEZONE_LABEL} ({TIMEZONE})")
     print()
     return True
@@ -667,7 +678,7 @@ def report_success(badge: str, ssid: str, mismatches: list[str]) -> bool:
 def report_failure(badge: str, error: Exception) -> None:
     text = str(error) if isinstance(error, BadgeError) else f"{type(error).__name__}: {error}"
     print()
-    print(red(f"!!!! FAILED: {badge}: {text}"))
+    print(red(f"!!!! FAILED: {with_sn(badge)}: {text}"))
     if PHASE == "paired":
         print("     The pairing did not finish: verify this badge's current settings manually.")
     print()
@@ -675,6 +686,11 @@ def report_failure(badge: str, error: Exception) -> None:
 
 # Results of this session: badge name -> "ok" | "check" | "failed"
 RESULTS: dict[str, str] = {}
+SERIALS: dict[str, str] = {}  # badge name -> serial number (the ID on the labels)
+
+
+def with_sn(badge: str) -> str:
+    return f"{badge} (SN {SERIALS[badge]})" if badge in SERIALS else badge
 CURRENT = ""
 
 
@@ -718,7 +734,7 @@ def print_summary(title: str = "Session summary") -> None:
     print(f"\n{title}: {counts['ok']} paired, {counts['check']} to verify, {counts['failed']} failed")
     labels = {"ok": green("paired"), "check": red("VERIFY"), "failed": red("FAILED")}
     for number, (badge, result) in enumerate(RESULTS.items(), 1):
-        print(f"  {number:>3}. {badge}  {labels[result]}")
+        print(f"  {number:>3}. {SERIALS.get(badge, '(SN unknown)'):<20} {badge}  {labels[result]}")
     print()
 
 
@@ -805,11 +821,11 @@ such as ! and $ otherwise.""", formatter_class=argparse.RawDescriptionHelpFormat
     except KeyboardInterrupt:
         print()
         if PHASE == "paired":
-            print(f"Interrupted (Ctrl-C) while connected to {CURRENT}: its pairing did NOT finish.")
+            print(f"Interrupted (Ctrl-C) while connected to {with_sn(CURRENT)}: its pairing did NOT finish.")
             print("Verify that badge's current settings manually (Wi-Fi, server, segment duration, timezone).")
             RESULTS[CURRENT] = "check"
         elif PHASE == "done":
-            print(f"Interrupted while disconnecting; {CURRENT} had already reported it is on Wi-Fi.")
+            print(f"Interrupted while disconnecting; {with_sn(CURRENT)} had already reported it is on Wi-Fi.")
             RESULTS.setdefault(CURRENT, "ok")
         else:
             print("Interrupted while no badge was connected.")

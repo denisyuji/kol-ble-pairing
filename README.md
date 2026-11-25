@@ -48,12 +48,12 @@ If SmartScreen or the antivirus blocks it, allow the file. You do not need to pa
 ## Pairing badges
 
 1. Start the tool. It asks for the Wi-Fi network name and password, once for the whole session.
-2. Put a badge in **pairing mode**. The tool finds it, sets it up and prints one line per step.
+2. Put a badge in **pairing mode**. The tool finds it, prints its serial number (SN, e.g. `4S1006EC4284510011`, the ID on the badge and box labels), sets it up and prints one line per step.
 3. It ends each badge with one of these lines, in green or red:
    - `==== SUCCESS: SMCD510011 is paired and connected to '<network>' ====`: done, take the next badge.
    - `!!!! FAILED: SMCD510011: <reason>`: set up that badge again, or check its settings by hand. If the badge can't see the network, the tool lists the networks it does see.
 
-   After each badge it lists every badge processed so far (`paired`, `VERIFY` or `FAILED`), so you can check them against the ID on the badge and box labels.
+   After each badge it lists every badge processed so far, by SN, with `paired`, `VERIFY` or `FAILED`, so you can check them against the labels.
 4. Press **Ctrl-C** to stop. The tool prints the same list for the whole session.
 
 Several badges can be in pairing mode at the same time: the tool pairs them one at a time, the strongest signal first. Badges already paired in the session are ignored. A pairing usually takes about 20 s.

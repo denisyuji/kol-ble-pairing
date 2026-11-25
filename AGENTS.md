@@ -32,6 +32,7 @@ A production-line CLI that pairs KOL Smart Badges running the **stock vendor fir
 The full reference is `../docs/BLE_PROVISIONING.md` and `../docs/blufi.proto` in the ESP32 workspace; the vendor web app (`https://blufi.gdszzy.com/`, bundle `assets/index-*.js`) is the authority on what the stock firmware expects.
 
 - Only badges named `SM…` with **exactly 10 characters** (e.g. `SMCD510011`) speak this command set (the app's `wifi_new`). Other lengths are the older JSON protocol (`[1,19]` → JSON), and `SMCE…` is 4G, whose vendor bodies are sent **without** the `BD A0` framing. `NAME_LENGTH` enforces this.
+- `02 01` (GET_INFO) answers `BlufiMsg.Info`: `#1` model, `#2` serial number (`4S1006EC4284510011`, printed on the badge and box labels; the advertised name is `SMCD` + its last 6 digits), `#3` firmware. The tool reads it first and shows the SN in every result line.
 - Config is `02 02` (get) and `02 12` (set) with message `BlufiMsg.NVS`, **not** `ble_rpc.proto`'s `ConfigUpdate`, whose field numbers differ (`ble_rpc.proto` is the custom GATT service of SA01A2/SA02A1 badges, with 16-bit opcodes). Replies are `02 <cmd> <status> <protobuf>`.
 - Encode like the app: string fields are proto3 `optional` and always sent (empty included); numbers are left out at 0. Limits: 255 bytes per string, 1021 bytes per message.
 - Family-1 commands (`[1,12,…]` reset, `[1,30]` set-time) are answered with `01 FF <cmd> <status:24-bit BE>`, not `01 <cmd> <status>`; the tool does not send any today.
