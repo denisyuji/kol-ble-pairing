@@ -42,7 +42,7 @@ except ImportError:
 # Fixed pairing parameters
 # ---------------------------------------------------------------------------
 
-VERSION = "1.0.1"  # bump before tagging: CI checks that the tag v<VERSION> matches
+VERSION = "1.1.0"  # bump before tagging: CI checks that the tag v<VERSION> matches
 
 SERVER = "badgeapi.yourkol.ai"  # config, record and log API
 SEGMENT_SECONDS = 600
@@ -405,6 +405,20 @@ class BluFi:
 PHASE = "idle"
 
 
+# Colour only on a terminal, and not when NO_COLOR is set (https://no-color.org).
+COLOR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+if COLOR and os.name == "nt":
+    os.system("")  # turns on ANSI colour codes in the Windows console
+
+
+def green(text: str) -> str:
+    return f"\033[1;32m{text}\033[0m" if COLOR else text
+
+
+def red(text: str) -> str:
+    return f"\033[1;31m{text}\033[0m" if COLOR else text
+
+
 def say(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
@@ -638,13 +652,13 @@ async def pair(device: BLEDevice, badge: str, ssid: str, password: str) -> list[
 def report_success(badge: str, ssid: str, mismatches: list[str]) -> bool:
     print()
     if mismatches:
-        print(f"!!!! {badge}: connected to {ssid!r}, BUT its configuration did not read back as sent:")
+        print(red(f"!!!! {badge}: connected to {ssid!r}, BUT its configuration did not read back as sent:"))
         for line in mismatches:
             print(f"       - {line}")
         print("     Verify the badge's settings manually.")
         print()
         return False
-    print(f"==== SUCCESS: {badge} is paired and connected to {ssid!r} ====")
+    print(green(f"==== SUCCESS: {badge} is paired and connected to {ssid!r} ===="))
     print(f"     server {SERVER} | segment {SEGMENT_SECONDS} s | timezone {TIMEZONE_LABEL} ({TIMEZONE})")
     print()
     return True
@@ -653,7 +667,7 @@ def report_success(badge: str, ssid: str, mismatches: list[str]) -> bool:
 def report_failure(badge: str, error: Exception) -> None:
     text = str(error) if isinstance(error, BadgeError) else f"{type(error).__name__}: {error}"
     print()
-    print(f"!!!! FAILED: {badge}: {text}")
+    print(red(f"!!!! FAILED: {badge}: {text}"))
     if PHASE == "paired":
         print("     The pairing did not finish: verify this badge's current settings manually.")
     print()
@@ -702,7 +716,7 @@ def print_summary(title: str = "Session summary") -> None:
         return
     counts = {r: sum(1 for v in RESULTS.values() if v == r) for r in ("ok", "check", "failed")}
     print(f"\n{title}: {counts['ok']} paired, {counts['check']} to verify, {counts['failed']} failed")
-    labels = {"ok": "paired", "check": "VERIFY", "failed": "FAILED"}
+    labels = {"ok": green("paired"), "check": red("VERIFY"), "failed": red("FAILED")}
     for number, (badge, result) in enumerate(RESULTS.items(), 1):
         print(f"  {number:>3}. {badge}  {labels[result]}")
     print()
@@ -745,7 +759,19 @@ def raise_interrupt(_signum, _frame) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=f"kol-ble-pairing {VERSION}\n\n{__doc__}", formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description=f"""kol-ble-pairing {VERSION}
+
+Pairs KOL Smart Badges (stock firmware) over BLE: sends the KOL server
+settings and the Wi-Fi credentials, then checks that the badge joins the
+Wi-Fi. Without --once it pairs badge after badge until Ctrl-C.
+
+examples:
+  %(prog)s --wifi-file line3.wifi                 # badge after badge
+  %(prog)s --ssid 'My Network'                    # asks for the password once
+  %(prog)s --ssid 'My Network' --once             # a single badge
+
+Put the SSID and password in single quotes: the shell changes characters
+such as ! and $ otherwise.""", formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--wifi-file", metavar="FILE", help="file with ssid=... and password=... lines")
     parser.add_argument("--ssid", help="Wi-Fi network name (default: --wifi-file, $KOL_WIFI_SSID, or asked once)")
     parser.add_argument("--password", help="Wi-Fi password (default: --wifi-file, $KOL_WIFI_PASSWORD, or asked once)")
@@ -790,10 +816,10 @@ def main() -> int:
         print_summary()
         return 130
     except BadgeError as error:  # --once: no badge found / several badges
-        print(f"\nERROR: {error}")
+        print(red(f"\nERROR: {error}"))
         return 1
     except Exception as error:  # noqa: BLE001  (Bluetooth adapter / OS errors while scanning)
-        print(f"\nERROR: {type(error).__name__}: {error}")
+        print(red(f"\nERROR: {type(error).__name__}: {error}"))
         print_summary()
         return 1
 

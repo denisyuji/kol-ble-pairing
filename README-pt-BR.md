@@ -49,7 +49,7 @@ Se o SmartScreen ou o antivírus bloquear, permita o arquivo. Não é preciso pa
 
 1. Inicie a ferramenta. Ela pede o nome e a senha da rede Wi-Fi, uma única vez para toda a sessão.
 2. Coloque um badge em **modo de pareamento**. A ferramenta o encontra, configura e mostra uma linha por etapa.
-3. Cada badge termina com uma destas linhas:
+3. Cada badge termina com uma destas linhas, em verde ou vermelho:
    - `==== SUCCESS: SMCD510011 is paired and connected to '<rede>' ====`: pronto, pegue o próximo badge.
    - `!!!! FAILED: SMCD510011: <motivo>`: configure esse badge de novo ou confira as configurações dele manualmente. Se o badge não enxerga a rede, a ferramenta lista as redes que ele vê.
 

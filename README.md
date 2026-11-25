@@ -49,7 +49,7 @@ If SmartScreen or the antivirus blocks it, allow the file. You do not need to pa
 
 1. Start the tool. It asks for the Wi-Fi network name and password, once for the whole session.
 2. Put a badge in **pairing mode**. The tool finds it, sets it up and prints one line per step.
-3. It ends each badge with one of these lines:
+3. It ends each badge with one of these lines, in green or red:
    - `==== SUCCESS: SMCD510011 is paired and connected to '<network>' ====`: done, take the next badge.
    - `!!!! FAILED: SMCD510011: <reason>`: set up that badge again, or check its settings by hand. If the badge can't see the network, the tool lists the networks it does see.
 
