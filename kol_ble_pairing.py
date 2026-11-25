@@ -42,7 +42,7 @@ except ImportError:
 # Fixed pairing parameters
 # ---------------------------------------------------------------------------
 
-VERSION = "1.1.0"  # bump before tagging: CI checks that the tag v<VERSION> matches
+VERSION = "1.2.0"  # bump before tagging: CI checks that the tag v<VERSION> matches
 
 SERVER = "badgeapi.yourkol.ai"  # config, record and log API
 SEGMENT_SECONDS = 600
