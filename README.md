@@ -10,18 +10,18 @@ Get the file for your computer from the [latest release](https://github.com/deni
 
 | Computer | File |
 |---|---|
-| Linux (Ubuntu 20.04 or newer) | `kol-ble-pairing-linux-x64.tar.gz` |
-| Mac with Apple Silicon (M1 or newer) | `kol-ble-pairing-macos-arm64.tar.gz` |
-| Windows 10 (1709 or newer) or 11 | `kol-ble-pairing-windows-x64.exe` |
+| Linux (Ubuntu 20.04 or newer) | `kol-ble-pairing-<version>-linux-x64.tar.gz` |
+| Mac with Apple Silicon (M1 or newer) | `kol-ble-pairing-<version>-macos-arm64.tar.gz` |
+| Windows 10 (1709 or newer) or 11 | `kol-ble-pairing-<version>-windows-x64.exe` |
 
-No Python or other software is needed.
+No Python or other software is needed. The commands below use version 1.2.0: replace it with the version you downloaded.
 
 ## Install and run
 
 **Linux** (desktop distros already have Bluetooth support, BlueZ):
 
 ```sh
-tar -xzf kol-ble-pairing-linux-x64.tar.gz
+tar -xzf kol-ble-pairing-1.2.0-linux-x64.tar.gz
 bluetoothctl power on
 ./kol-ble-pairing
 ```
@@ -29,7 +29,7 @@ bluetoothctl power on
 **macOS**
 
 ```sh
-tar -xzf kol-ble-pairing-macos-arm64.tar.gz
+tar -xzf kol-ble-pairing-1.2.0-macos-arm64.tar.gz
 ./kol-ble-pairing
 ```
 
@@ -40,7 +40,7 @@ The first run asks for Bluetooth access for Terminal: allow it (System Settings 
 **Windows**: open PowerShell in the download folder and run:
 
 ```powershell
-.\kol-ble-pairing-windows-x64.exe
+.\kol-ble-pairing-1.2.0-windows-x64.exe
 ```
 
 If SmartScreen or the antivirus blocks it, allow the file. You do not need to pair the badge in the Windows Bluetooth settings.

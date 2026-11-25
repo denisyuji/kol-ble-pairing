@@ -71,19 +71,29 @@ jobs:
 
       # A tarball keeps the executable bit on Linux and macOS; artifacts
       # and release assets would otherwise drop it.
+      # Names carry the version the executable reports, e.g.
+      # kol-ble-pairing-1.2.0-linux-x64.tar.gz.
       - name: Package
+        id: package
         shell: bash
         run: |
+          exe=dist/kol-ble-pairing
+          [ "$RUNNER_OS" = Windows ] && exe=dist/kol-ble-pairing.exe
+          version=$("$exe" --version | awk '{print $2}' | tr -d '\r')
+          name="kol-ble-pairing-$version-${MATRIX_ASSET#kol-ble-pairing-}"
           mkdir -p out
           if [ "$RUNNER_OS" = Windows ]; then
-            cp dist/kol-ble-pairing.exe "out/${{ matrix.asset }}.exe"
+            cp "$exe" "out/$name.exe"
           else
-            tar -czf "out/${{ matrix.asset }}.tar.gz" -C dist kol-ble-pairing
+            tar -czf "out/$name.tar.gz" -C dist kol-ble-pairing
           fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+        env:
+          MATRIX_ASSET: ${{ matrix.asset }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
+          name: ${{ steps.package.outputs.name }}
           path: out/*
           if-no-files-found: error
 

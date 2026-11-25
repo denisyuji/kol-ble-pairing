@@ -10,18 +10,18 @@ Baixe o arquivo para o seu computador na [última versão](https://github.com/de
 
 | Computador | Arquivo |
 |---|---|
-| Linux (Ubuntu 20.04 ou mais novo) | `kol-ble-pairing-linux-x64.tar.gz` |
-| Mac com Apple Silicon (M1 ou mais novo) | `kol-ble-pairing-macos-arm64.tar.gz` |
-| Windows 10 (1709 ou mais novo) ou 11 | `kol-ble-pairing-windows-x64.exe` |
+| Linux (Ubuntu 20.04 ou mais novo) | `kol-ble-pairing-<versão>-linux-x64.tar.gz` |
+| Mac com Apple Silicon (M1 ou mais novo) | `kol-ble-pairing-<versão>-macos-arm64.tar.gz` |
+| Windows 10 (1709 ou mais novo) ou 11 | `kol-ble-pairing-<versão>-windows-x64.exe` |
 
-Não é preciso instalar Python nem outro programa.
+Não é preciso instalar Python nem outro programa. Os comandos abaixo usam a versão 1.2.0: troque pela versão que você baixou.
 
 ## Instalar e executar
 
 **Linux** (as distribuições desktop já vêm com suporte a Bluetooth, o BlueZ):
 
 ```sh
-tar -xzf kol-ble-pairing-linux-x64.tar.gz
+tar -xzf kol-ble-pairing-1.2.0-linux-x64.tar.gz
 bluetoothctl power on
 ./kol-ble-pairing
 ```
@@ -29,7 +29,7 @@ bluetoothctl power on
 **macOS**
 
 ```sh
-tar -xzf kol-ble-pairing-macos-arm64.tar.gz
+tar -xzf kol-ble-pairing-1.2.0-macos-arm64.tar.gz
 ./kol-ble-pairing
 ```
 
@@ -40,7 +40,7 @@ Na primeira execução, o macOS pede acesso ao Bluetooth para o Terminal: permit
 **Windows**: abra o PowerShell na pasta do download e execute:
 
 ```powershell
-.\kol-ble-pairing-windows-x64.exe
+.\kol-ble-pairing-1.2.0-windows-x64.exe
 ```
 
 Se o SmartScreen ou o antivírus bloquear, permita o arquivo. Não é preciso parear o badge nas configurações de Bluetooth do Windows.
